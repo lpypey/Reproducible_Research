@@ -1,0 +1,150 @@
+---
+title: "Reproducible Research (course project 1)"
+output:
+  word_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(fig.width=15, fig.height=8, echo = TRUE)
+```
+
+## Loading and preprocessing the data
+
+Reading the dataset activity.csv, containing the variables
+
+* steps: Number of steps taken in a 5-minute interval
+* date: The date on which the measurement was taken
+* interval: Identifier for the 5-minute interval in which the measurement was taken
+  
+code:
+``` {r}
+kolom = c("integer", "character", "integer")
+actdf <- read.csv("activity.csv", head=TRUE, colClasses=kolom, na.strings="NA")
+
+head(actdf)
+```
+
+Processing the dataset: set date column in correct form and remove rows with missing values
+``` {r}
+actdf$date <- as.Date(actdf$date)
+actdfclean <- subset(actdf, !is.na(actdf$steps))
+```
+
+## What is the mean total number of steps taken per day?
+
+Calculating the total number of steps taken each day
+Presented in a Histogram
+
+```{r}
+dailytotal <- tapply(actdfclean$steps, actdfclean$date, sum, na.rm=TRUE)
+dailytotal <- dailytotal[!is.na(dailytotal)]
+
+par(cex.main=3, cex.lab=2.5, cex.axis=2, mar=c(5,6,7,2))
+hist(x=dailytotal, col="blue", breaks=25, xlab="steps", ylab="Frequency", main="Distribution total number of steps per day")
+```
+
+The mean and median total number of steps taken per day
+
+
+```{r}
+m <- mean(dailytotal)
+m = as.integer(m)
+med <- median(dailytotal)
+med = as.integer(med)
+```
+The mean is **`r m`**  
+The median is **`r med`**
+
+## What is the average daily pattern?
+
+To show the average daily pattern, a time series plot of the 5-minute interval(x-axis) and the average number of steps taken, averaged across all days (y-axis) is plotted.
+
+```{r}
+average <- tapply(actdfclean$steps, actdfclean$interval, mean, na.rm=TRUE)
+average_integer <- data.frame(interval=as.integer(names(average)), avg=average)
+
+par(cex.main=3, cex.lab=2.5, cex.axis=2, mar=c(5,6,7,2), lwd=2)
+with(average_integer, plot(interval, avg, type="l", col="blue", xlab="5 minute intervals", ylab="average steps", main="Average steps in the interval across all days"))
+```
+
+Calculate which 5-minute interval, on average across all the days in the dataset, contains the maximum number of steps
+
+```{r}
+max_steps <- max(average_integer$avg)
+interval <- average_integer[average_integer$avg==max_steps,1]
+max_steps <- round(max_steps, digits=1)
+```
+
+In the dataset at 5-minute interval **`r interval`** the maximum average of **`r max_steps`** steps is taken.
+
+## Imputing missing values
+
+Calculating the total number of rows with missing values coded as NA
+
+```{r}
+aantal<- sum(is.na(actdf$steps))
+```
+
+The original dataset has **`r aantal`** rows with missing data.
+
+To fill the missing values in the dataset the mean is used for the 5-minute interval in which the data is missing.
+
+```{r}
+average <- tapply(actdfclean$steps, actdfclean$interval, mean, na.rm=TRUE)
+dfimpute <- actdf
+leeg <- is.na(dfimpute$steps)
+dfimpute$steps[leeg] <- average[as.character(dfimpute$interval[leeg])]
+```
+
+Histogram of the total number of steps taken each day, corrected for missing values
+
+```{r}
+correcteddailytotal <- tapply(dfimpute$steps, dfimpute$date, sum, na.rm=TRUE)
+par(cex.main=2.8, cex.lab=2.5, cex.axis=2, mar=c(5,6,7,2))
+hist(x=correcteddailytotal, col="red", breaks=25, xlab="steps", ylab="Frequency", main="Distribution total steps per day (missing data imputed)")
+```
+
+Calculating the mean and median total number of steps taken per day, with imputed data for missing values
+
+```{r}
+m <- mean(correcteddailytotal)
+m = as.integer(m)
+med <- median(correcteddailytotal)
+med = as.integer(med)
+```
+
+The mean for the imputed dataset is **`r m`**  
+The median for the imputed dataset is **`r med`**
+
+## Are there differences in activity patterns between weekdays and weekends?
+
+Creating a new factor vaiable in the dataset with two levels - "weekday" and "weekend"
+
+```{r}
+is_weekday<- function(d){
+        wd <- weekdays(d)
+        ifelse(wd=="zaterdag"|wd=="zondag","weekend","weekday")
+}
+
+wx <- sapply(dfimpute$date, is_weekday)
+dfimpute$wk <- as.factor(wx)
+head(dfimpute)
+```
+
+Panel plot containing a time series plot averaged across all weekday days or weekend days
+
+```{r}
+wk_df <- aggregate(steps~wk + interval, data=dfimpute, FUN=mean)
+
+library(lattice)
+
+xyplot(steps~interval|factor(wk), 
+       layout=c(1,2),
+       xlab="Interval",
+       ylab="Number of steps",
+       fig.height=15,
+       type="l",
+       lty=1,
+       data=wk_df)
+
